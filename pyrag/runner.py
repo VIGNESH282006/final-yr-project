@@ -121,7 +121,7 @@ class RAGProgramRunner:
                 out = entry.get("answer_returned", entry.get("answer", ""))
                 if raw:
                     print(f"    raw: {raw}")
-                print(f"    → {out}")
+                print(f"    → {out}  [confidence: {entry.get('confidence', '?')}]")
 
     def _execute_code_with_fixes(
         self,
