@@ -321,10 +321,34 @@ doing the work. Full analysis + candidate fixes (move the tag instruction earlie
 in the prompt, add a low-confidence few-shot example, stricter format enforcement)
 in `findings/2026-08-15_contribution1_first_real_run.md`.
 
-**Next up:** fix the prompt so the model reliably emits `<confidence>`, then
-re-run and re-check whether confidence values actually vary (not always "low")
-before calling contribution #1 validated. Only after that should we write the
-final before/after report section or move to contribution #2.
+**Done -- prompt fix attempt:** rewrote `CONFIDENCE_INSTRUCTIONS` and both
+`ANSWER_SYSTEM_PROMPT_WITH_DOCS` / `ANSWER_SYSTEM_PROMPT_NO_DOCS` in `pyrag/tools.py`:
+1. Confidence rule now appears FIRST in the system prompt (was previously buried
+   after several other rule blocks), framed as "checked by an automated system,
+   not optional" / "a response missing this tag is treated as FAILED."
+2. Added a SECOND few-shot example to each prompt demonstrating a LOW-confidence
+   case (previously only a high-confidence example was shown, which may have read
+   as "just copy this pattern" rather than genuine per-case reasoning).
+3. `ANSWER_SYSTEM_PROMPT_NO_DOCS` (used for the final synthesis call) now
+   explicitly calls out: if any given background fact is itself the literal word
+   "unknown", confidence must be capped at medium -- directly targets the Q7-style
+   failure where an "unknown" input fact got silently treated as solid.
+- Verified `extract_confidence_tag()` only ever runs on the model's OWN reply
+  text (`result` from `llm.generate()`), never on the system prompt string --
+  confirmed the new example blocks embedded in the prompt can't leak into
+  parsing (architecturally impossible, not just incidentally fine).
+- Regression-checked: `notebooks/01_smoke_test.py` and
+  `notebooks/04_test_confidence_fix.py` both still pass unchanged after the
+  prompt rewrite.
+
+**Next up:** re-run `notebooks/02_real_pipeline.ipynb` on Colab with this updated
+prompt (needs `git pull` or fresh clone from `myrepo` + Colab runtime restart) on
+the same 8 questions. Specifically check whether `<confidence>` tags now actually
+appear in the raw model output, and whether confidence VARIES across answers
+(not always "low" by default) -- that's what would validate the mechanism as
+originally designed, as opposed to the "always retry once" side effect seen in
+the first real run. Only after that should we write the final before/after report
+section or move to contribution #2.
 
 ## How to resume next session
 Read this file top to bottom, then check `notebooks/` for the latest numbered notebook to
