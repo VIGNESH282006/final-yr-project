@@ -401,10 +401,31 @@ after every answer's arrow line. Regression-tested (`01_smoke_test.py`,
 not change any pipeline behavior, but is necessary before the NEXT re-run can
 actually confirm (not infer) that confidence varies per-answer.
 
+**Update, same session -- 4th real run, STILL no `[confidence: ...]` visible
+anywhere in the output**, despite user confirming they DID do Runtime -> Restart
+session first. Diagnosed: this points to a Colab-specific gotcha, not a logic
+bug -- if a `PyRAG` folder persists in the Colab filesystem across a session
+restart (can happen depending on runtime type/state), `!git clone ... PyRAG`
+fails silently inside a shell-magic cell (no cell error, execution just
+continues), and `%cd PyRAG` then enters the STALE existing folder instead of a
+fresh clone -- so the notebook keeps running old code with zero visible
+indication anything is wrong. This fully explains why the trace-print fix from
+earlier in this session appeared to have no effect: it was never actually
+running.
+
+**Fixed:** clone cell now `shutil.rmtree("PyRAG", ignore_errors=True)` before
+cloning, guaranteeing a fresh checkout every single run regardless of leftover
+state. Added a new verification cell right after clone that prints `git log -1
+--oneline` -- compare this commit hash against
+https://github.com/VIGNESH282006/final-yr-project/commits/main before trusting
+any run's results. This class of bug (silently stale code) is worth remembering
+for ANY future Colab notebook in this project, not just this one.
+
 **Next up:** re-run `notebooks/02_real_pipeline.ipynb` on Colab once more (fresh
-clone/pull + runtime restart) with this trace-visibility fix, and this time read
-the actual `[confidence: ...]` value on every single answer line across all 8
-questions -- that direct evidence (not inference from retry timing) is what
+clone/pull + runtime restart), and FIRST check the printed commit hash matches
+`2fc3ef9` (or whatever is newest on GitHub) before reading anything else. Then
+read the actual `[confidence: ...]` value on every single answer line across all
+8 questions -- that direct evidence (not inference from retry timing) is what
 finally validates or refutes the confidence mechanism. Once confirmed, write the
 before/after report section (Q7 full before/after trace comparison) and move to
 contribution #2 (anti under-decomposition checker).
