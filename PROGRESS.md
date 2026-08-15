@@ -275,6 +275,35 @@ seeing the answer. Decisions locked in:
    before/after section (old trace vs new trace on Q7) for the project report,
    then move to contribution #2 (anti under-decomposition checker).
 
+## 2026-08-15 — Session 5: own GitHub repo + Colab GPU-OOM fix
+
+**Done:**
+- Set up user's own GitHub repo (`https://github.com/VIGNESH282006/final-yr-project`,
+  public) as the project's real remote, separate from `origin`
+  (`GasolSun36/PyRAG`, kept as read-only reference to the official repo -- NEVER
+  push there). Local git remote `myrepo` points at the user's repo.
+  Pushed all work so far (contribution #1 code, eval.py, notebooks, findings,
+  PROGRESS.md) there.
+- User hit a REAL GPU out-of-memory error on Colab's free T4 trying to load BOTH
+  Qwen2.5-7B-Instruct AND Qwen2.5-Coder-7B-Instruct in 4-bit at once -- two 7B
+  models' combined memory (weights + activations + KV cache + framework overhead)
+  exceeded what's actually free on a T4 after Colab's own reservations, despite
+  earlier back-of-envelope math suggesting it would "just fit."
+- **Fix: switched to ONE shared Qwen2.5-7B-Instruct model for both the Plan role
+  and Decompose/Answer roles** (`shared_llm` used for both `instruct_llm` and
+  `plan_llm` in the notebook). This matches the paper's own README, which
+  explicitly documents single-model mode as valid ("simpler", vs. running two
+  vLLM instances). Updated `notebooks/02_real_pipeline.ipynb` cells 1, 9/10-11
+  accordingly, and fixed the clone cell to point at the user's own repo instead of
+  the upstream one. Committed + pushed.
+
+**Not yet done:** the actual re-run on Colab with contribution #1's confidence-aware
+code, using the single-model setup, has NOT happened yet as of this log entry --
+user was mid-troubleshooting the OOM error when this session's log was written.
+**Next session should start by checking whether the user successfully re-ran
+`02_real_pipeline.ipynb` after this fix, and if so, read the new Question 7 trace
+together** (compare against `findings/2026-08-15_baseline_run_8q_raw_output.txt`).
+
 ## How to resume next session
 Read this file top to bottom, then check `notebooks/` for the latest numbered notebook to
 see how far we got. Ask the user to confirm current status before proceeding if unclear.
