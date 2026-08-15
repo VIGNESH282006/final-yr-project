@@ -34,6 +34,19 @@ def _answer_indicates_insufficient_info(text: str) -> bool:
     return any(m.lower() in t for m in _INSUFFICIENT_ANSWER_MARKERS)
 
 
+# PyRAG++ contribution #1: an answer step is "insufficient" if EITHER its text contains
+# a sentinel marker (the paper's original check, kept as a safety net for models that
+# don't reliably emit the new tag) OR its self-reported confidence is not "high". The
+# confidence check is what catches a fluent, sentinel-free wrong answer (see Question 7
+# in findings/2026-08-15_baseline_run_8q.md: the model said "Aladin" with no sentinel
+# word at all, even though its own earlier reasoning step had already established the
+# evidence was insufficient).
+def _answer_step_is_insufficient(entry: Dict[str, Any]) -> bool:
+    if _answer_indicates_insufficient_info(entry.get("answer_returned", "")):
+        return True
+    return entry.get("confidence", "high") != "high"
+
+
 def _retrieve_indices_for_insufficient_answers(execution_log: list) -> Set[int]:
     last_retrieve_idx = 0
     out: Set[int] = set()
@@ -41,7 +54,7 @@ def _retrieve_indices_for_insufficient_answers(execution_log: list) -> Set[int]:
         if entry["type"] == "retrieve":
             last_retrieve_idx += 1
         elif entry["type"] == "answer":
-            if _answer_indicates_insufficient_info(entry.get("answer_returned", "")):
+            if _answer_step_is_insufficient(entry):
                 if last_retrieve_idx > 0:
                     out.add(last_retrieve_idx)
     return out
@@ -59,6 +72,13 @@ def _topk_used_at_retrieve_index(execution_log: list, retrieve_index: int) -> Op
 
 def _last_retrieve_index(execution_log: list) -> int:
     return sum(1 for e in execution_log if e["type"] == "retrieve")
+
+
+def _last_answer_entry(execution_log: list) -> Optional[Dict[str, Any]]:
+    for entry in reversed(execution_log):
+        if entry["type"] == "answer":
+            return entry
+    return None
 
 
 def _build_retrieve_topk_boost(
@@ -155,9 +175,11 @@ class RAGProgramRunner:
 
         retried_with_topk10 = False
         boost = _build_retrieve_topk_boost(result["execution_log"])
-        if not boost and _answer_indicates_insufficient_info(
+        final_answer_entry = _last_answer_entry(result["execution_log"])
+        final_answer_is_insufficient = _answer_indicates_insufficient_info(
             str(result.get("final_answer", ""))
-        ):
+        ) or (final_answer_entry is not None and final_answer_entry.get("confidence", "high") != "high")
+        if not boost and final_answer_is_insufficient:
             last_r = _last_retrieve_index(result["execution_log"])
             if last_r > 0:
                 used = _topk_used_at_retrieve_index(result["execution_log"], last_r)

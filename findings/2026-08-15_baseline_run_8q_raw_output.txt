@@ -1,0 +1,252 @@
+Raw Colab output from notebooks/02_real_pipeline.ipynb, cell 14 (pipeline run) + cell 16
+(predicted vs gold comparison), first full end-to-end run on real models/retrieval.
+Date: 2026-08-15. See 2026-08-15_baseline_run_8q.md in this same folder for analysis.
+
+======================================================================
+# Question 1/8: Were Scott Derrickson and Ed Wood of the same nationality?
+======================================================================
+
+=== Sub-queries ===
+  1. What is Scott Derrickson's nationality?
+  2. What is Ed Wood's nationality?
+
+=== Generated Code ===
+docs1 = retrieve("What is Scott Derrickson's nationality?")
+derrickson_nationality = answer("What is Scott Derrickson's nationality?", docs1)
+
+docs2 = retrieve("What is Ed Wood's nationality?")
+wood_nationality = answer("What is Ed Wood's nationality?", docs2)
+
+final_answer = answer(
+    f"Given: Scott Derrickson is {derrickson_nationality}, Ed Wood is {wood_nationality}. "
+    f"Answer the question: Were Scott Derrickson and Ed Wood of the same nationality?"
+)
+
+=== Execution Trace ===
+[Step 1] retrieve("What is Scott Derrickson's nationality?", topk=3)
+    doc1: Doc 2 (Title: Scott Derrickson) Scott Derrickson (born July 16, 1966) is an American...
+    doc2: Doc 8 (Title: Sinister (film)) Sinister is a 2012 supernatural horror film direc...
+    doc3: Doc 6 (Title: Deliver Us from Evil (2014 film)) Deliver Us from Evil is a 2014 A...
+[Step 2] answer("What is Scott Derrickson's nationality?")
+    raw: <redacted_thinking>Doc [1] provides information about Scott Derrickson's nationality, stating he is an American director.</redacted_thinking><answer> American </answer>
+    -> American
+[Step 3] retrieve("What is Ed Wood's nationality?", topk=3)
+    doc1: Doc 5 (Title: Ed Wood) Edward Davis Wood Jr. (October 10, 1924 - December 10, 19...
+    doc2: Doc 1 (Title: Ed Wood (film)) Ed Wood is a 1994 American biographical period com...
+    doc3: Doc 3 (Title: Woodson, Arkansas) Woodson is a census-designated place (CDP) in P...
+[Step 4] answer("What is Ed Wood's nationality?")
+    raw: <redacted_thinking>Doc [1] provides information about Ed Wood's nationality, stating he was an American filmmaker.</redacted_thinking><answer> American </answer>
+    -> American
+[Step 5] answer("Given: Scott Derrickson is American, Ed Wood is American. Answer the question: Were Scott Derrickson and Ed Wood of the same nationality?")
+    raw: <redacted_thinking>Both Scott Derrickson and Ed Wood are identified as American in the given facts. Therefore, they share the same nationality.</redacted_thinking><answer> yes </answer>
+    -> yes
+
+=== Final Answer ===
+yes
+
+======================================================================
+# Question 2/8: What government position was held by the woman who portrayed Corliss Archer in the film Kiss and Tell?
+======================================================================
+
+=== Sub-queries ===
+  1. Who portrayed Corliss Archer in the film Kiss and Tell?
+  2. What government positions did the actress who played Corliss Archer hold?
+
+=== Generated Code ===
+docs1 = retrieve("Who portrayed Corliss Archer in the film Kiss and Tell?")
+actor = answer("Who portrayed Corliss Archer in the film Kiss and Tell?", docs1)
+
+docs2 = retrieve(f"What government positions did the actress who played Corliss Archer hold?")
+positions = answer(f"What government positions did the actress who played Corliss Archer hold?", docs2)
+
+final_answer = answer(
+    f"Given: {actor} portrayed Corliss Archer in the film Kiss and Tell, and {actor} held the following government positions: {positions}. "
+    f"Answer the question: What government position was held by the woman who portrayed Corliss Archer in the film Kiss and Tell?"
+)
+
+[Retry] Insufficient-information answer at some step(s); re-executing the same code with retrieve topk boost: {2: 10}
+
+=== Execution Trace ===
+[Step 1] retrieve("Who portrayed Corliss Archer in the film Kiss and Tell?", topk=3)
+    doc1: Doc 7 (Title: Kiss and Tell (1945 film)) Kiss and Tell is a 1945 American comedy...
+    doc2: Doc 6 (Title: A Kiss for Corliss) A Kiss for Corliss is a 1949 American comedy f...
+    doc3: Doc 4 (Title: Meet Corliss Archer (TV series)) Meet Corliss Archer is an America...
+[Step 2] answer("Who portrayed Corliss Archer in the film Kiss and Tell?")
+    raw: <redacted_thinking>Doc [1] mentions that Shirley Temple starred as Corliss Archer in the 1945 film "Kiss and Tell".</redacted_thinking><answer>Shirley Temple</answer>
+    -> Shirley Temple
+[Step 3] retrieve("What government positions did the actress who played Corliss Archer hold?", topk=10)
+    doc1: Doc 4 (Title: Meet Corliss Archer (TV series))
+    doc2: Doc 7 (Title: Kiss and Tell (1945 film))
+    doc3: Doc 2 (Title: Shirley Temple) Shirley Temple Black (April 23, 1928 - February 10...
+    doc4: Doc 3 (Title: Janet Waldo) Janet Marie Waldo (February 4, 1920 - June 12, 2016) ...
+    doc5: Doc 6 (Title: A Kiss for Corliss)
+    doc6: Doc 1 (Title: Meet Corliss Archer) Meet Corliss Archer, a program from radio's G...
+    doc7: Doc 10 (Title: Charles Craft) Charles Craft (May 9, 1902 - September 19, 1968) w...
+    doc8: Doc 5 (Title: Lord High Treasurer) The post of Lord High Treasurer or Lord Treas...
+    doc9: Doc 8 (Title: Secretary of State for Constitutional Affairs) The office of Secre...
+    doc10: Doc 9 (Title: Village accountant) The Village Accountant (variously known as "Pa...
+[Step 4] answer("What government positions did the actress who played Corliss Archer hold?")
+    raw: <redacted_thinking>None of the documents mention any actress playing Corliss Archer holding any government positions. The documents discuss Corliss Archer in "Meet Corliss Archer" and Shirley Temple playing the character, but do not provide information about any government positions held by the actress who played the role.</redacted_thinking><answer> unknown </answer>
+    -> unknown
+[Step 5] answer("Given: Shirley Temple portrayed Corliss Archer in the film Kiss and Tell, and Shirley Temple held the following government positions: unknown. Answer the question: What government position was held by the woman who portrayed Corliss Archer in the film Kiss and Tell?")
+    raw: <redacted_thinking>The question asks about the government position held by Shirley Temple, who portrayed Corliss Archer in the film Kiss and Tell. However, the given information states that her government positions are unknown.</redacted_thinking><answer> unknown </answer>
+    -> unknown
+
+=== Final Answer ===
+unknown
+(GOLD: Chief of Protocol -- fact not present in any of the 10 shipped context docs; genuine
+retrieval-recall gap, not the sentinel-string bug. See analysis doc.)
+
+======================================================================
+# Question 3/8: What science fantasy young adult series, told in first person, has a set of companion books narrating the stories of enslaved worlds and alien species?
+======================================================================
+
+=== Sub-queries ===
+  1. What is the name of the science fantasy young adult series told in first person?
+  2. Does the series have a set of companion books narrating the stories of enslaved worlds and alien species?
+
+[Retry] Insufficient-information answer at some step(s); re-executing the same code with retrieve topk boost: {2: 10}
+
+=== Execution Trace ===
+[Step 1] retrieve -> Doc 9 (Animorphs), Doc 7 (The Divide trilogy), Doc 2 (Victoria Hanley)
+[Step 2] answer("What is the name of the science fantasy...") -> "Animorphs" (correct)
+[Step 3] retrieve(topk=10) "Does the series 'Animorphs' have companion books about enslaved worlds..."
+    -> includes Doc 3 (The Hork-Bajir Chronicles) -- this IS the correct companion book, present in context!
+[Step 4] answer(...) raw: "Doc [1] mentions that The Hork-Bajir Chronicles is a companion book to the
+    Animorphs series, but it does not provide information about books focusing on enslaved
+    worlds and alien species." -> "unknown"
+    (NOTE: the model under-used its own retrieved evidence here -- Hork-Bajir Chronicles IS
+    about an enslaved alien species in the Animorphs universe. Retrieval succeeded; the
+    Answer Agent's reasoning was too conservative / didn't connect the dots.)
+[Step 5] final answer("Given: ... does not have such companion books ...")
+    raw: "...Therefore, we need to infer the answer based on what 'Animorphs' lacks."
+    -> "The Lost Colony series"  (HALLUCINATED, not grounded in any retrieved doc at all)
+
+=== Final Answer ===
+The Lost Colony series
+(GOLD: Animorphs -- ironically the correct series was found and named correctly in Step 2,
+then the pipeline talked itself out of it and fabricated a different title as final_answer.)
+
+======================================================================
+# Question 4/8: Are the Laleli Mosque and Esma Sultan Mansion located in the same neighborhood?
+======================================================================
+Sub-queries: Where is Laleli Mosque? / Where is Esma Sultan Mansion?
+-> Laleli Mosque: "Laleli, Fatih, Istanbul, Turkey"
+-> Esma Sultan Mansion: "Bosphorus, Ortakoy neighborhood of Istanbul, Turkey"
+-> final_answer: "No" (different neighborhoods -- correct reasoning)
+GOLD: "no" -- correct, only a capitalization difference.
+
+======================================================================
+# Question 5/8: The director of the romantic comedy "Big Stone Gap" is based in what New York city?
+======================================================================
+Sub-queries: director of Big Stone Gap? / what NY city is director based in?
+-> director: "Adriana Trigiani"
+-> city: "Greenwich Village, New York City"
+-> final_answer: "Greenwich Village, New York City"  -- CORRECT, exact match with gold.
+
+======================================================================
+# Question 6/8: 2014 S/S is the debut album of a South Korean boy group that was formed by who?
+======================================================================
+Sub-queries: which group debuted with 2014 S/S? / which company formed that group?
+-> group: "WINNER"
+-> company: "YG Entertainment"
+-> final_answer: "YG Entertainment" -- CORRECT, exact match with gold.
+
+======================================================================
+# Question 7/8: Who was known by his stage name Aladin and helped organizations improve their performance as a consultant?
+======================================================================
+
+=== Generated Code ===
+docs1 = retrieve("What is Aladin's stage name?")
+stage_name = answer("What is Aladin's stage name?", docs1)
+docs2 = retrieve(f"Who was {stage_name} as a consultant?")
+consultant_info = answer(f"Who was {stage_name} as a consultant?", docs2)
+docs3 = retrieve(f"Which organizations did {stage_name} help improve their performance as a consultant?")
+organizations = answer(f"Which organizations did {stage_name} help improve their performance as a consultant?", docs3)
+final_answer = answer(
+    f"Given: {stage_name}'s stage name is Aladin, {stage_name} was a consultant, and {stage_name} helped improve the performance of {organizations}. "
+    f"Answer the question: Who was known by his stage name Aladin and helped organizations improve their performance as a consultant?"
+)
+
+[Retry] Insufficient-information answer at some step(s); re-executing the same code with retrieve topk boost: {2: 10, 3: 10}
+
+=== Execution Trace ===
+[Step 1] retrieve("What is Aladin's stage name?", topk=3)
+    doc1: Doc 4 (Title: Eenasul Fateh) Eenasul Fateh (Bengali...) born 3 April... [THE CORRECT
+           ANSWER IS RIGHT HERE, RETRIEVED CORRECTLY, AT STEP 1]
+    doc2: Doc 7 (Title: ELDee) ...
+    doc3: Doc 5 (Title: Mick (DJ)) ...
+[Step 2] answer("What is Aladin's stage name?")
+    raw: "Aladin's stage name is mentioned in Doc [1], where it states that he is also known
+    by his stage name Aladin." -> "Aladin"
+    (NOTE: sub-query itself was circular/malformed by the Plan Agent -- it asked for
+    "Aladin's stage name" instead of "Aladin's real name", so the answer just parroted
+    "Aladin" back even though Doc 1 (Eenasul Fateh) was sitting right there.)
+[Step 3] retrieve("Who was Aladin as a consultant?", topk=10) -> still includes Doc 4 (Eenasul Fateh)
+[Step 4] answer("Who was Aladin as a consultant?")
+    raw: "Aladin is mentioned as Eenasul Fateh, also known by his stage name Aladin, who is
+    a Bangladeshi-British cultural practitioner, magician, live artist and former
+    international management consultant. Doc [1]." -> "Eenasul Fateh"
+    (Correct name surfaces HERE, in consultant_info -- but this variable is never used
+    in the final synthesis prompt below! Only stage_name and organizations are used.)
+[Step 5] retrieve("Which organizations did Aladin help improve their performance as a consultant?", topk=10)
+[Step 6] answer(...)
+    raw: "None of the documents mention Aladin helping any organization improve their
+    performance as a consultant. All documents discuss other individuals and their roles
+    or achievements." -> "unknown"
+[Step 7] final answer("Given: Aladin's stage name is Aladin, Aladin was a consultant, and
+    Aladin helped improve the performance of unknown. Answer the question: ...")
+    raw: "...Given that Aladin's stage name is Aladin and he was a consultant who helped
+    improve performance, the answer is Aladin." -> "Aladin"
+    (CONFIDENTLY WRONG: no "unknown"/sentinel text in this final answer at all, so
+    runner.py's string-match check does NOT fire, despite the answer being built on top
+    of an explicit "unknown" input one step earlier, AND despite the correct name
+    (Eenasul Fateh) having been correctly identified in Step 4 but simply never wired into
+    the final synthesis prompt by the Plan Agent's generated code.)
+
+=== Final Answer ===
+Aladin
+(GOLD: Eenasul Fateh -- this is the clearest reproduction of the target flaw. Two
+compounding bugs: (a) Plan Agent's generated code never passed `consultant_info` into the
+final synthesis f-string, so the correct name never had a chance to reach final_answer; (b)
+the final answer is confidently wrong text with no sentinel marker, so the existing
+adaptive-retrieval check can't catch it -- this is the false-confidence blind spot.)
+
+======================================================================
+# Question 8/8: The arena where the Lewiston Maineiacs played their home games can seat how many people?
+======================================================================
+Sub-queries: where did they play? / what's the seating capacity?
+-> arena: "Androscoggin Bank Colisee"
+-> capacity answer raw: "Doc [1] mentions the seating capacity of the Androscoggin Bank
+   Colisee as 4,000 capacity (3,677 seated)." -> extracted as "4,000"
+-> final_answer: "4,000"
+GOLD: "3,677 seated" -- the source doc contains BOTH numbers; Answer Agent picked the
+rounded venue-capacity figure over the specific seated-count HotpotQA uses as gold. Scoring/
+extraction nuance, not a framework logic bug.
+
+======================================================================
+SUMMARY TABLE (cell 16 output)
+======================================================================
+Q: Were Scott Derrickson and Ed Wood of the same nationality?
+  predicted: yes | gold: yes                                    [correct]
+
+Q: What government position was held by the woman who portrayed Corliss Archer in the film Kiss and Tell?
+  predicted: unknown | gold: Chief of Protocol                  [wrong -- retrieval gap]
+
+Q: What science fantasy young adult series...
+  predicted: The Lost Colony series | gold: Animorphs            [wrong -- hallucinated]
+
+Q: Are the Laleli Mosque and Esma Sultan Mansion located in the same neighborhood?
+  predicted: No | gold: no                                       [correct, case only]
+
+Q: The director of the romantic comedy "Big Stone Gap" is based in what New York city?
+  predicted: Greenwich Village, New York City | gold: same        [correct]
+
+Q: 2014 S/S is the debut album of a South Korean boy group that was formed by who?
+  predicted: YG Entertainment | gold: same                        [correct]
+
+Q: Who was known by his stage name Aladin and helped organizations improve their performance as a consultant?
+  predicted: Aladin | gold: Eenasul Fateh                         [wrong -- target flaw]
+
+Q: The arena where the Lewiston Maineiacs played their home games can seat how many people?
+  predicted: 4,000 | gold: 3,677 seated                           [close, extraction nuance]

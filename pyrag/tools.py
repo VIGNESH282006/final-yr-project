@@ -2,7 +2,20 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from pyrag.llm import OpenAILLM
 from pyrag.retrieval_agent import RetrievalAgent
-from pyrag.utils import extract_answer_tag, format_docs_for_prompt
+from pyrag.utils import extract_answer_tag, extract_confidence_tag, format_docs_for_prompt
+
+CONFIDENCE_INSTRUCTIONS = (
+    "\n"
+    "Confidence rule (PyRAG++ addition):\n"
+    "- You MUST also output a <confidence> tag: high, medium, or low.\n"
+    "- high = the documents (or given facts) directly and unambiguously state the answer.\n"
+    "- medium = the answer is a reasonable inference from the documents, but not stated outright.\n"
+    "- low = the documents do NOT contain enough information, OR any fact you were given as "
+    "background is itself uncertain/unknown -- in that case your confidence can be no higher than "
+    "low, even if you still produce a best-guess <answer>.\n"
+    "- Do NOT let a fluent, confident-sounding <answer> hide a low-confidence situation. If in doubt, "
+    "say low.\n"
+)
 
 ANSWER_SYSTEM_PROMPT_WITH_DOCS = (
     "You are given a question and retrieved documents.\n"
@@ -10,7 +23,8 @@ ANSWER_SYSTEM_PROMPT_WITH_DOCS = (
     "Even for yes/no questions, decide yes or no by reasoning from facts in the documents.\n\n"
     "Output format (STRICT):\n"
     "<redacted_thinking> ... </redacted_thinking>\n"
-    "<answer> ... </answer>\n\n"
+    "<answer> ... </answer>\n"
+    "<confidence> high | medium | low </confidence>\n\n"
     "Evidence citation rule:\n"
     "- Whenever you use evidence from the documents in your reasoning, you MUST cite it inline as Doc [i] "
     "(matching the document indices shown in the retrieved block, e.g. [Doc 1] → Doc [1]).\n"
@@ -21,10 +35,12 @@ ANSWER_SYSTEM_PROMPT_WITH_DOCS = (
     "- Match the answer TYPE to the QUESTION: WHO / which person / 谁先 / born first / earlier → a person's "
     "NAME in <answer>, not only a date; WHEN / 何时 → date or time; yes/no → exactly yes / no / unknown when "
     "the documents do not support a definite answer.\n"
-    "- Do NOT output anything outside <redacted_thinking> and <answer>.\n\n"
+    "- Do NOT output anything outside <redacted_thinking>, <answer>, and <confidence>.\n"
+    f"{CONFIDENCE_INSTRUCTIONS}\n"
     "Example (do NOT copy the content, only follow the style):\n"
     "<redacted_thinking>Doc [1] states that Future Ted serves as the narrator, and Doc [4] confirms the voice actor.</redacted_thinking>\n"
     "<answer> Ted Mosby </answer>\n"
+    "<confidence> high </confidence>\n"
 )
 
 ANSWER_SYSTEM_PROMPT_NO_DOCS = (
@@ -39,10 +55,12 @@ ANSWER_SYSTEM_PROMPT_NO_DOCS = (
     "- NEVER answer 'yes' or 'no' to a WHO/WHICH/WHEN/WHERE question.\n\n"
     "Output format (STRICT):\n"
     "<redacted_thinking> ... </redacted_thinking>\n"
-    "<answer> ... </answer>\n\n"
+    "<answer> ... </answer>\n"
+    "<confidence> high | medium | low </confidence>\n\n"
     "- In <redacted_thinking>, identify the actual question type and combine the given facts to produce the answer (1–2 sentences).\n"
     "- The <answer> must directly answer the question — a name, date, place, etc. — NOT 'yes' or 'no' unless the question is truly yes/no.\n"
-    "- Do NOT output anything outside <redacted_thinking> and <answer>.\n"
+    "- Do NOT output anything outside <redacted_thinking>, <answer>, and <confidence>.\n"
+    f"{CONFIDENCE_INSTRUCTIONS}"
 )
 
 ANSWER_SYSTEM_PROMPT = ANSWER_SYSTEM_PROMPT_WITH_DOCS
@@ -90,6 +108,7 @@ def make_tools(
         )
         result = llm.generate(answer_system_prompt_for_docs(docs), user_prompt)
         returned = extract_answer_tag(result)
+        confidence = extract_confidence_tag(result)
         execution_log.append({
             "step": len(execution_log) + 1,
             "type": "answer",
@@ -97,6 +116,7 @@ def make_tools(
             "docs": docs,
             "answer_raw": result,
             "answer_returned": returned,
+            "confidence": confidence,
         })
         return returned
 

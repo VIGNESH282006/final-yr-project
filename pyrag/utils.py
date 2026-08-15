@@ -25,6 +25,24 @@ def extract_answer_tag(text: str) -> str:
     return text.strip()
 
 
+VALID_CONFIDENCE_LEVELS = ("high", "medium", "low")
+
+
+def extract_confidence_tag(text: str) -> str:
+    """
+    Pulls the model's self-reported confidence out of a <confidence>...</confidence>
+    tag. Falls back to "low" (the safe default) if the tag is missing or contains
+    something other than high/medium/low -- we never want a parsing failure to look
+    like high confidence.
+    """
+    m = re.search(r"<confidence>\s*(.*?)\s*</confidence>", text, re.DOTALL | re.IGNORECASE)
+    if m:
+        level = m.group(1).strip().lower()
+        if level in VALID_CONFIDENCE_LEVELS:
+            return level
+    return "low"
+
+
 def normalize_python_source(code: str) -> str:
     if not code:
         return code
