@@ -421,14 +421,28 @@ https://github.com/VIGNESH282006/final-yr-project/commits/main before trusting
 any run's results. This class of bug (silently stale code) is worth remembering
 for ANY future Colab notebook in this project, not just this one.
 
-**Next up:** re-run `notebooks/02_real_pipeline.ipynb` on Colab once more (fresh
-clone/pull + runtime restart), and FIRST check the printed commit hash matches
-`2fc3ef9` (or whatever is newest on GitHub) before reading anything else. Then
-read the actual `[confidence: ...]` value on every single answer line across all
-8 questions -- that direct evidence (not inference from retry timing) is what
-finally validates or refutes the confidence mechanism. Once confirmed, write the
-before/after report section (Q7 full before/after trace comparison) and move to
-contribution #2 (anti under-decomposition checker).
+**Update, same session -- SUCCESS, contribution #1 validated.** User confirmed
+the printed commit hash (`f82eea0`) matched GitHub before running, so this final
+run of the day is trustworthy. Result: **75.0% EM (6/8)**, up from 50.0%
+baseline. Directly observed (not inferred): 19/21 answer() calls came back
+`confidence: high`, exactly 2 came back `low` -- genuine variation, not a
+constant default. Q7's final synthesis step is the flagship example: answer
+text = "Eenasul Fateh" (correct, no sentinel word) but `confidence: low` --
+because the reasoning chain leading to it conflated two different people from
+two separate lookups, and the model itself flagged that shakiness when asked
+directly. The OLD sentinel-string-only check could never have caught this.
+
+**STOPPED HERE FOR THE DAY per user request.** Full write-up, including honest
+open gaps (tiny n=8 sample, no controlled ablation yet, rate_confidence()'s own
+false-positive/negative rate uncharacterized, Q2/Q8 are NOT contribution #1's
+job, single-shared-model setup is a documented substitution not the paper's
+two-model config) saved to
+`findings/2026-08-15_contribution1_VALIDATED.md`. **That file is the
+authoritative handoff document for the next session** -- read it in full before
+writing any code. Recommended next steps in order: (1) scale up sample size
+beyond n=8, (2) build a controlled ablation isolating confidence-awareness's
+actual causal effect, (3) only then write the final report section and move to
+contribution #2.
 
 ## How to resume next session
 Read this file top to bottom, then check `notebooks/` for the latest numbered notebook to
