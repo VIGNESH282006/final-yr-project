@@ -297,12 +297,34 @@ seeing the answer. Decisions locked in:
   accordingly, and fixed the clone cell to point at the user's own repo instead of
   the upstream one. Committed + pushed.
 
-**Not yet done:** the actual re-run on Colab with contribution #1's confidence-aware
-code, using the single-model setup, has NOT happened yet as of this log entry --
-user was mid-troubleshooting the OOM error when this session's log was written.
-**Next session should start by checking whether the user successfully re-ran
-`02_real_pipeline.ipynb` after this fix, and if so, read the new Question 7 trace
-together** (compare against `findings/2026-08-15_baseline_run_8q_raw_output.txt`).
+**Update, same session:** user successfully re-ran the full notebook after the OOM
+fix. Result: **62.5% EM (5/8), up from 50.0% (4/8) baseline.** Q3 and Q7 (our two
+flagged before/after cases) both flipped from wrong to correct; Q5 regressed
+slightly (right city, lost "Greenwich Village" specificity); Q8 unchanged; Q2 got
+factually richer/more correct information than baseline but is still EM-wrong due
+to verbose phrasing not matching the terse gold string. Full comparison table and
+traces in `findings/2026-08-15_contribution1_first_real_run.md`.
+
+**IMPORTANT, must read before claiming success on contribution #1:** checked the
+real raw model output line by line -- **the real Qwen2.5-7B-Instruct model is NOT
+emitting the `<confidence>` tag at all**, in ANY of the 8 questions' answer() calls,
+despite the prompt explicitly instructing it to. Verified locally that
+`extract_confidence_tag()` on the real (tagless) raw text correctly falls back to
+its safe default, `"low"`. Consequence: every single answer this run was logged
+with `confidence="low"` UNCONDITIONALLY, so the new retry trigger effectively
+became "always allow one retry with boosted retrieval," not "retry specifically
+when the model signals genuine uncertainty." **The mechanism as originally
+designed (discriminating between the model's genuinely high vs. low confidence)
+is therefore still UNTESTED** -- this run is real evidence that boosted-retry
+helps, but not yet evidence that structured self-reported confidence is what's
+doing the work. Full analysis + candidate fixes (move the tag instruction earlier
+in the prompt, add a low-confidence few-shot example, stricter format enforcement)
+in `findings/2026-08-15_contribution1_first_real_run.md`.
+
+**Next up:** fix the prompt so the model reliably emits `<confidence>`, then
+re-run and re-check whether confidence values actually vary (not always "low")
+before calling contribution #1 validated. Only after that should we write the
+final before/after report section or move to contribution #2.
 
 ## How to resume next session
 Read this file top to bottom, then check `notebooks/` for the latest numbered notebook to
