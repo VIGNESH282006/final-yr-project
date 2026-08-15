@@ -4,13 +4,18 @@ Reproduces the Question 7 failure from findings/2026-08-15_baseline_run_8q.md
 performance as a consultant?") with a scripted FakeLLM, to prove contribution #1
 (confidence-aware signals) changes the runner's behavior on exactly this case.
 
-The FakeLLM below is scripted to reproduce the ORIGINAL baseline's exact wrong
-final answer ("Aladin", gold: "Eenasul Fateh") with LOW confidence on both the
-insufficient sub-answer AND the wrong final answer -- mirroring what a real model
-would very plausibly emit under the new confidence-aware prompt. This test does not
-prove the real model will always self-report low confidence correctly (that can only
-be confirmed by re-running on Colab) -- it proves the RUNNER now reacts correctly
-WHEN the model does.
+IMPORTANT (revised after real-model testing): the real Qwen2.5-7B-Instruct model
+never reliably emitted an in-response <confidence> tag, even after two rounds of
+stronger prompting (see findings/2026-08-15_contribution1_first_real_run.md). So
+confidence is now rated by a SEPARATE, dedicated follow-up call
+(pyrag.tools.rate_confidence) -- meaning each answer() call now makes TWO LLM
+generate() calls instead of one: the main answer, then a one-word confidence
+rating. This script's ScriptedLLM must supply a response for each of those calls,
+in order.
+
+This test does not prove the real model will always self-report low confidence
+correctly (that can only be confirmed by re-running on Colab) -- it proves the
+RUNNER + rate_confidence() plumbing reacts correctly WHEN the model does.
 
 Run with:  python notebooks/04_test_confidence_fix.py
 """
@@ -57,37 +62,43 @@ final_answer = answer(
 )
 ```''',
 
-        # 3. answer() call for "What is Aladin's real name?" -- correct, high confidence
-        '<redacted_thinking>Doc 1 names him.</redacted_thinking>'
-        '<answer>Eenasul Fateh</answer><confidence>high</confidence>',
+        # --- FIRST execution attempt (topk=3) ---
+        # 3. answer() main call for "What is Aladin's real name?" -- correct
+        '<redacted_thinking>Doc 1 names him.</redacted_thinking><answer>Eenasul Fateh</answer>',
+        # 4. rate_confidence() follow-up for that answer -- well-supported, high
+        'high',
 
-        # 4. answer() call for "Which organizations..." -- model correctly signals it
-        #    doesn't know, LOW confidence, matching Q7's real trace
+        # 5. answer() main call for "Which organizations..." -- doesn't know
         '<redacted_thinking>None of the documents name specific organizations.</redacted_thinking>'
-        '<answer>unknown</answer><confidence>low</confidence>',
+        '<answer>unknown</answer>',
+        # 6. rate_confidence() follow-up -- evidence doesn't support it, low
+        'low',
 
-        # 5. FIRST final synthesis attempt (topk=3 round): confidently wrong,
-        #    NO sentinel word -- this is what slipped past the OLD runner.py entirely.
+        # 7. FIRST final synthesis attempt: confidently wrong, no sentinel word
         '<redacted_thinking>Based on the given facts, the consultant is Aladin.</redacted_thinking>'
-        '<answer>Aladin</answer><confidence>low</confidence>',
+        '<answer>Aladin</answer>',
+        # 8. rate_confidence() follow-up -- this is the crucial one: the evidence
+        #    ("organizations: unknown") does NOT actually support "Aladin" as an answer,
+        #    so a reasonable rater says low, even though the answer text has no sentinel word.
+        'low',
 
         # --- runner.py should now trigger a retry because confidence="low" ---
         # The retry re-executes the SAME generated code from scratch, so all THREE
-        # answer() calls run again, in order: real_name, organizations, final_answer.
+        # answer() calls run again, each now making 2 LLM calls (answer + confidence).
 
-        # 6. answer() retry for "What is Aladin's real name?" -- same as before, high confidence
-        '<redacted_thinking>Doc 1 names him.</redacted_thinking>'
-        '<answer>Eenasul Fateh</answer><confidence>high</confidence>',
+        # 9-10. retry: "What is Aladin's real name?" -- same as before
+        '<redacted_thinking>Doc 1 names him.</redacted_thinking><answer>Eenasul Fateh</answer>',
+        'high',
 
-        # 7. answer() retry for "Which organizations..." at boosted topk -- still unknown
+        # 11-12. retry: "Which organizations..." at boosted topk -- still unknown
         '<redacted_thinking>Still no organizations named in the retrieved documents.</redacted_thinking>'
-        '<answer>unknown</answer><confidence>low</confidence>',
+        '<answer>unknown</answer>',
+        'low',
 
-        # 8. SECOND final synthesis attempt (after retry): this time the model
-        #    (correctly) falls back to the real name it already knows, still flagging
-        #    low confidence about the "organizations" part it can't verify.
+        # 13-14. SECOND final synthesis attempt: this time falls back to the real name
         '<redacted_thinking>Organizations are unverifiable, but the person\'s real name is known.</redacted_thinking>'
-        '<answer>Eenasul Fateh</answer><confidence>medium</confidence>',
+        '<answer>Eenasul Fateh</answer>',
+        'medium',
     ]
 
     llm = ScriptedLLM(responses)

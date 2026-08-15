@@ -64,10 +64,52 @@ Plausible reasons, not yet confirmed:
    before the confidence tag would appear (unlikely given `<answer>` always closes first,
    but should verify with a raw token count check if the fix below doesn't work).
 
-## Next step (before doing anything else with contribution #1)
+## Update: attempted fix #1 (stronger prompt wording) also failed
 
-Need to make the model reliably emit the tag, then re-run, before this contribution can be
-called validated. Options to try, roughly in order of first thing to attempt:
+Tried the plan below: moved the confidence rule to the very front of the system prompt,
+framed it as "REQUIRED... checked by an automated system... a response missing this tag
+is treated as FAILED", and added a second few-shot example demonstrating a genuine
+low-confidence case (previously only high-confidence was shown). Re-ran the same 8
+questions on Colab.
+
+**Result: still 62.5% EM, and the model STILL never emitted a `<confidence>` tag in ANY
+of the 8 questions' raw output.** Checked every `raw:` block by hand. Additionally, this
+run's Q7 saw the Decompose Agent fail 3x with a JSON parse error and fall back to using
+the whole original question as a single sub-query -- plausibly collateral damage from the
+system prompt becoming longer/more insistent, illustrating that "just add more forceful
+wording" is not a free action; it can degrade unrelated parts of the pipeline.
+
+**This is now a confirmed, reproducible finding across 2 independent attempts (16+
+answer() calls, 0 confidence tags emitted): prompt wording alone cannot reliably get
+Qwen2.5-7B-Instruct to fill in a 3rd structured output field (confidence) alongside
+`<redacted_thinking>` and `<answer>` in a single generation pass.** This is a legitimate,
+citable limitation for the report -- it's consistent with why the base PyRAG paper's own
+RL-trained variant exists: reliable structured multi-field behavior is something training
+can fix that prompting alone often can't, on a 7B open model.
+
+## Fix implemented: separate the confidence rating into its own dedicated LLM call
+
+Rather than continuing to fight the single-pass multi-field format, `pyrag/tools.py`'s
+`answer()` now makes a SECOND, small follow-up call (`rate_confidence()`) after the main
+answer is generated: given the question, the evidence, and the answer just produced, rate
+confidence in ONE WORD (high/medium/low). This is a much smaller, more constrained ask for
+a 7B model than the original 3-field structured response.
+
+Cost: doubles LLM calls (2 per `answer()` instead of 1) -- roughly doubles generation
+time/compute per question. A deliberate, reasonable trade-off, documented here so it's not
+a surprise later.
+
+Added `pyrag/utils.py::extract_confidence_word()` -- more forgiving than
+`extract_confidence_tag()`, finds the first high/medium/low word anywhere in a short
+free-text reply (tolerates "High.", explanatory replies, etc.), still defaults safely to
+"low" if none of the three words appear.
+
+**Status as of this write-up: NOT YET re-run on Colab with the new architecture.** Next
+session should confirm the dedicated confidence-rating call actually produces varying
+values (not a single constant) before calling contribution #1 validated.
+
+## Original next-step plan (superseded by the update above, kept for the record)
+
 1. Move the confidence tag requirement earlier/more prominently in the system prompt
    (currently after several other rule blocks -- may be getting deprioritized).
 2. Add 1-2 additional few-shot examples showing a LOW-confidence case specifically (the

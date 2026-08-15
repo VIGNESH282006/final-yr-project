@@ -47,6 +47,12 @@ final_answer = answer(
 )
 ```'''
 
+        # tools.py's rate_confidence() sends a small dedicated follow-up prompt
+        # (identifiable by "ANSWER GIVEN") asking for one word: high/medium/low.
+        # Every answer in this smoke test is well-supported, so always say "high".
+        if "ANSWER GIVEN" in user_prompt:
+            return "high"
+
         # tools.py's answer() function asks the LLM to answer using <answer> tags.
         # We tell these three answer() calls apart by the exact question text,
         # not loose keyword guesses (that's what tripped us up on the first run).

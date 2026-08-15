@@ -43,6 +43,22 @@ def extract_confidence_tag(text: str) -> str:
     return "low"
 
 
+def extract_confidence_word(text: str) -> str:
+    """
+    Parses a short free-text reply to a "reply with one word: high/medium/low" style
+    question. Unlike extract_confidence_tag (which expects an exact <confidence> tag),
+    this tolerates the model adding punctuation or a short surrounding sentence (e.g.
+    "High." or "I'd say low.") by searching for the FIRST valid confidence word anywhere
+    in the reply. Falls back to "low" if none of the three words appear at all -- we
+    never want an unparseable reply to look like high confidence.
+    """
+    t = text.strip().lower()
+    m = re.search(r"\b(high|medium|low)\b", t)
+    if m:
+        return m.group(1)
+    return "low"
+
+
 def normalize_python_source(code: str) -> str:
     if not code:
         return code

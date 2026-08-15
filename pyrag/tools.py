@@ -2,32 +2,24 @@ from typing import Any, Callable, Dict, List, Optional, Tuple
 
 from pyrag.llm import OpenAILLM
 from pyrag.retrieval_agent import RetrievalAgent
-from pyrag.utils import extract_answer_tag, extract_confidence_tag, format_docs_for_prompt
+from pyrag.utils import extract_answer_tag, extract_confidence_word, format_docs_for_prompt
 
-CONFIDENCE_INSTRUCTIONS = (
-    "\n"
-    "Confidence rule -- READ THIS FIRST, it is checked by an automated system, not optional:\n"
-    "- Every single response MUST end with a <confidence> tag. A response missing this tag "
-    "is treated as a FAILED response and will be discarded.\n"
-    "- Choose exactly one of: high, medium, low.\n"
-    "  - high = the documents (or given facts) directly and unambiguously state the answer.\n"
-    "  - medium = the answer is a reasonable inference from the documents, but not stated outright.\n"
-    "  - low = the documents do NOT contain enough information, OR any fact you were given as "
-    "background is itself uncertain/unknown -- in that case your confidence can be no higher than "
-    "low, even if you still produce a best-guess <answer>.\n"
-    "- Do NOT let a fluent, confident-sounding <answer> hide a low-confidence situation. If in doubt, "
-    "say low.\n"
-)
-
+# NOTE (PyRAG++ contribution #1, revised): we tried asking the model to emit a
+# <confidence> tag INSIDE the same response as <redacted_thinking>/<answer>, across two
+# rounds of increasingly forceful prompt wording. Qwen2.5-7B-Instruct never once produced
+# the tag in either attempt (see findings/2026-08-15_contribution1_first_real_run.md) --
+# a 7B instruct model reliably filling in a 3rd structured field in one pass turned out to
+# be a real, reproducible limit of prompting alone, not something more forceful wording
+# could fix. So confidence is now a SEPARATE, dedicated follow-up call (rate_confidence()
+# below) with a much smaller, single-field task -- easier for a small model to get right,
+# at the cost of one extra LLM call per answer().
 ANSWER_SYSTEM_PROMPT_WITH_DOCS = (
-    f"{CONFIDENCE_INSTRUCTIONS}\n"
     "You are given a question and retrieved documents.\n"
     "You MUST answer using ONLY information from the retrieved documents.\n"
     "Even for yes/no questions, decide yes or no by reasoning from facts in the documents.\n\n"
-    "Output format (STRICT -- all three tags are REQUIRED on every response):\n"
+    "Output format (STRICT):\n"
     "<redacted_thinking> ... </redacted_thinking>\n"
-    "<answer> ... </answer>\n"
-    "<confidence> high | medium | low </confidence>  <-- REQUIRED, do not omit\n\n"
+    "<answer> ... </answer>\n\n"
     "Evidence citation rule:\n"
     "- Whenever you use evidence from the documents in your reasoning, you MUST cite it inline as Doc [i] "
     "(matching the document indices shown in the retrieved block, e.g. [Doc 1] → Doc [1]).\n"
@@ -38,19 +30,13 @@ ANSWER_SYSTEM_PROMPT_WITH_DOCS = (
     "- Match the answer TYPE to the QUESTION: WHO / which person / 谁先 / born first / earlier → a person's "
     "NAME in <answer>, not only a date; WHEN / 何时 → date or time; yes/no → exactly yes / no / unknown when "
     "the documents do not support a definite answer.\n"
-    "- Do NOT output anything outside <redacted_thinking>, <answer>, and <confidence>.\n\n"
-    "Example A -- documents directly state the answer (do NOT copy the content, only follow the style):\n"
+    "- Do NOT output anything outside <redacted_thinking> and <answer>.\n\n"
+    "Example (do NOT copy the content, only follow the style):\n"
     "<redacted_thinking>Doc [1] states that Future Ted serves as the narrator, and Doc [4] confirms the voice actor.</redacted_thinking>\n"
     "<answer> Ted Mosby </answer>\n"
-    "<confidence> high </confidence>\n\n"
-    "Example B -- documents do NOT contain the answer (do NOT copy the content, only follow the style):\n"
-    "<redacted_thinking>None of the retrieved documents mention this person's award history.</redacted_thinking>\n"
-    "<answer> unknown </answer>\n"
-    "<confidence> low </confidence>\n"
 )
 
 ANSWER_SYSTEM_PROMPT_NO_DOCS = (
-    f"{CONFIDENCE_INSTRUCTIONS}\n"
     "There are NO retrieved documents. The question text itself contains background facts "
     "(after 'Given:') and the actual question to answer (after 'Answer the question:').\n"
     "You MUST use the provided facts to answer the ACTUAL QUESTION.\n\n"
@@ -59,28 +45,50 @@ ANSWER_SYSTEM_PROMPT_NO_DOCS = (
     "- If the question asks WHEN → reply with a date or time.\n"
     "- If the question asks WHERE → reply with a place.\n"
     "- ONLY answer yes/no when the question is explicitly a yes/no question (e.g. 'Are both ...?', 'Is it true ...?').\n"
-    "- NEVER answer 'yes' or 'no' to a WHO/WHICH/WHEN/WHERE question.\n"
-    "- CRITICAL: if ANY background fact after 'Given:' is itself the word 'unknown' or otherwise "
-    "missing/uncertain, your <confidence> for this final answer can be AT MOST medium, even if you "
-    "still produce a best-guess <answer> by process of elimination.\n\n"
-    "Output format (STRICT -- all three tags are REQUIRED on every response):\n"
+    "- NEVER answer 'yes' or 'no' to a WHO/WHICH/WHEN/WHERE question.\n\n"
+    "Output format (STRICT):\n"
     "<redacted_thinking> ... </redacted_thinking>\n"
-    "<answer> ... </answer>\n"
-    "<confidence> high | medium | low </confidence>  <-- REQUIRED, do not omit\n\n"
+    "<answer> ... </answer>\n\n"
     "- In <redacted_thinking>, identify the actual question type and combine the given facts to produce the answer (1–2 sentences).\n"
     "- The <answer> must directly answer the question — a name, date, place, etc. — NOT 'yes' or 'no' unless the question is truly yes/no.\n"
-    "- Do NOT output anything outside <redacted_thinking>, <answer>, and <confidence>.\n\n"
-    "Example A -- all given facts are solid (do NOT copy the content, only follow the style):\n"
-    "<redacted_thinking>Both facts are stated plainly, so I can directly combine them.</redacted_thinking>\n"
-    "<answer> Ted Mosby </answer>\n"
-    "<confidence> high </confidence>\n\n"
-    "Example B -- one given fact was itself 'unknown' (do NOT copy the content, only follow the style):\n"
-    "<redacted_thinking>One of the given facts is 'unknown', so my answer here is only a guess.</redacted_thinking>\n"
-    "<answer> Ted Mosby </answer>\n"
-    "<confidence> low </confidence>\n"
+    "- Do NOT output anything outside <redacted_thinking> and <answer>.\n"
 )
 
 ANSWER_SYSTEM_PROMPT = ANSWER_SYSTEM_PROMPT_WITH_DOCS
+
+CONFIDENCE_RATING_SYSTEM_PROMPT = (
+    "You will be shown a QUESTION, the EVIDENCE that was available to answer it (documents, "
+    "or background facts), and the ANSWER that was given. Your ONLY job is to rate how well the "
+    "EVIDENCE actually supports the ANSWER.\n\n"
+    "Reply with EXACTLY ONE WORD: high, medium, or low. Nothing else -- no explanation, no "
+    "punctuation, no extra text.\n\n"
+    "- high = the evidence directly and unambiguously supports the answer.\n"
+    "- medium = the answer is a reasonable inference from the evidence, but not stated outright.\n"
+    "- low = the evidence does NOT actually support the answer (e.g. the answer says "
+    "'unknown', or the evidence doesn't mention the answer at all, or the evidence itself "
+    "contains the word 'unknown').\n"
+)
+
+
+def _build_confidence_rating_prompt(query: str, evidence: str, answer_text: str) -> str:
+    return (
+        f"=== QUESTION ===\n{query}\n=== END QUESTION ===\n\n"
+        f"=== EVIDENCE ===\n{evidence}\n=== END EVIDENCE ===\n\n"
+        f"=== ANSWER GIVEN ===\n{answer_text}\n=== END ANSWER ===\n\n"
+        "One word only: high, medium, or low."
+    )
+
+
+def rate_confidence(llm: OpenAILLM, query: str, docs: List[str], answer_text: str) -> str:
+    """
+    A small, dedicated follow-up call whose only job is rating confidence -- separate
+    from the main answer() call, since a single generation asking for both an answer AND
+    a confidence tag proved unreliable in practice (see the note above ANSWER_SYSTEM_PROMPT).
+    """
+    evidence = format_docs_for_prompt(docs) if docs else "(no documents -- background facts were embedded in the question above)"
+    user_prompt = _build_confidence_rating_prompt(query, evidence, answer_text)
+    raw = llm.generate(CONFIDENCE_RATING_SYSTEM_PROMPT, user_prompt)
+    return extract_confidence_word(raw)
 
 
 def answer_system_prompt_for_docs(docs: List[str]) -> str:
@@ -125,7 +133,7 @@ def make_tools(
         )
         result = llm.generate(answer_system_prompt_for_docs(docs), user_prompt)
         returned = extract_answer_tag(result)
-        confidence = extract_confidence_tag(result)
+        confidence = rate_confidence(llm, query, docs, returned)
         execution_log.append({
             "step": len(execution_log) + 1,
             "type": "answer",

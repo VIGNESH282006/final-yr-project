@@ -341,14 +341,53 @@ in `findings/2026-08-15_contribution1_first_real_run.md`.
   `notebooks/04_test_confidence_fix.py` both still pass unchanged after the
   prompt rewrite.
 
-**Next up:** re-run `notebooks/02_real_pipeline.ipynb` on Colab with this updated
-prompt (needs `git pull` or fresh clone from `myrepo` + Colab runtime restart) on
-the same 8 questions. Specifically check whether `<confidence>` tags now actually
-appear in the raw model output, and whether confidence VARIES across answers
-(not always "low" by default) -- that's what would validate the mechanism as
-originally designed, as opposed to the "always retry once" side effect seen in
-the first real run. Only after that should we write the final before/after report
-section or move to contribution #2.
+**Update, same session -- the prompt fix did NOT work either.** User re-ran on
+Colab: still 62.5% EM (5/8, same as before), and inspection of every `raw:` block
+in the output confirmed **the model STILL never emitted a `<confidence>` tag**,
+despite the stronger "REQUIRED / checked by an automated system" wording and the
+new low-confidence few-shot example. This round also broke Q7's Decompose Agent
+(3x JSON parse failures, fell back to using the original question as its own
+single sub-query) -- likely collateral damage from the system prompt getting
+longer/more demanding. **Conclusion: prompt wording alone cannot reliably get
+Qwen2.5-7B-Instruct to fill in a 3rd structured field (confidence) alongside
+`<redacted_thinking>` and `<answer>` in one generation pass.** This is a real,
+reproducible negative result (2 attempts, 16+ answer calls, zero tags emitted),
+not noise -- documented as a finding in itself.
+
+**Fix (architectural, not prompt wording): split confidence rating into a
+SEPARATE, dedicated LLM call.** Rather than asking for 3 fields in one response,
+`pyrag/tools.py::answer()` now:
+1. Generates the answer exactly as before (reverted prompts back to their
+   original simpler form -- `ANSWER_SYSTEM_PROMPT_WITH_DOCS`/`_NO_DOCS` no longer
+   mention confidence at all).
+2. Makes a SECOND, small follow-up call via the new `rate_confidence()` function:
+   shown the question, the evidence, and the answer that was given, and asked to
+   reply with ONE WORD (high/medium/low) rating how well the evidence supports
+   the answer. Much smaller ask for a 7B model than a multi-field structured
+   response.
+- Added `pyrag/utils.py::extract_confidence_word()`: a more forgiving parser than
+  `extract_confidence_tag()` (which expects an exact `<confidence>` tag) -- finds
+  the first high/medium/low word ANYWHERE in a short free-text reply (tolerates
+  "High.", "I'd say low, since...", etc.), still defaults safely to "low" if none
+  of the three words appear at all.
+- **Trade-off, must document in the report:** this doubles LLM calls (2 per
+  `answer()` instead of 1), meaning roughly double generation time/compute per
+  question on Colab. A deliberate, reasonable cost for a working signal, but
+  worth being upfront about.
+- Updated `notebooks/01_smoke_test.py`'s FakeLLM and
+  `notebooks/04_test_confidence_fix.py`'s ScriptedLLM to supply a response for
+  each of the now-2-calls-per-answer() sequence. Both regression tests re-run and
+  PASS with the new architecture; `notebooks/03_score_baseline.py` unaffected
+  (doesn't touch tools.py).
+
+**Next up:** re-run `notebooks/02_real_pipeline.ipynb` on Colab with this
+architectural change (needs fresh clone/pull from `myrepo` + Colab runtime
+restart). This time check whether `rate_confidence()`'s one-word replies
+actually vary (some high, some low/medium) across the 8 questions' answer calls
+-- THAT is what would finally validate the confidence mechanism as genuinely
+discriminating, rather than defaulting to one value for every call. Only after
+that should we write the final before/after report section or move to
+contribution #2.
 
 ## How to resume next session
 Read this file top to bottom, then check `notebooks/` for the latest numbered notebook to
