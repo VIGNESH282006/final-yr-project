@@ -380,14 +380,34 @@ SEPARATE, dedicated LLM call.** Rather than asking for 3 fields in one response,
   PASS with the new architecture; `notebooks/03_score_baseline.py` unaffected
   (doesn't touch tools.py).
 
-**Next up:** re-run `notebooks/02_real_pipeline.ipynb` on Colab with this
-architectural change (needs fresh clone/pull from `myrepo` + Colab runtime
-restart). This time check whether `rate_confidence()`'s one-word replies
-actually vary (some high, some low/medium) across the 8 questions' answer calls
--- THAT is what would finally validate the confidence mechanism as genuinely
-discriminating, rather than defaulting to one value for every call. Only after
-that should we write the final before/after report section or move to
-contribution #2.
+**Update, same session -- third real run, BEST result yet: 75.0% EM (6/8),** up
+from 50.0% baseline. Q2 (Corliss Archer) regressed to "unknown" (down from a
+factually-correct-but-verbose miss last run -- still EM-wrong either way, no
+real change there). Q5 (Big Stone Gap) recovered full "Greenwich Village, New
+York City" specificity, now correct again. Q3 and Q7 (our flagged before/after
+cases) both remain fixed. Q1/Q4/Q6/Q8 stable. Retry lines (`[Retry] ...`) fired
+for Q2, Q6, Q7 only -- NOT for Q1, Q3, Q4, Q5, Q8 -- meaning confidence
+plausibly varied across questions rather than defaulting to one constant value
+everywhere (unlike the earlier in-prompt-tag attempts where it silently
+defaulted to "low" every time). This is the first run with real signal that the
+two-call rate_confidence() architecture might be discriminating correctly.
+
+**Caveat/gap found while reviewing this run:** `runner.py::_print_trace()` never
+actually PRINTED the `confidence` field, so this conclusion had to be inferred
+indirectly from which questions got a `[Retry]` line -- not verified directly
+from the trace. **Fixed:** trace now prints `[confidence: high/medium/low]`
+after every answer's arrow line. Regression-tested (`01_smoke_test.py`,
+`04_test_confidence_fix.py`) -- both still pass. This fix is display-only, does
+not change any pipeline behavior, but is necessary before the NEXT re-run can
+actually confirm (not infer) that confidence varies per-answer.
+
+**Next up:** re-run `notebooks/02_real_pipeline.ipynb` on Colab once more (fresh
+clone/pull + runtime restart) with this trace-visibility fix, and this time read
+the actual `[confidence: ...]` value on every single answer line across all 8
+questions -- that direct evidence (not inference from retry timing) is what
+finally validates or refutes the confidence mechanism. Once confirmed, write the
+before/after report section (Q7 full before/after trace comparison) and move to
+contribution #2 (anti under-decomposition checker).
 
 ## How to resume next session
 Read this file top to bottom, then check `notebooks/` for the latest numbered notebook to
